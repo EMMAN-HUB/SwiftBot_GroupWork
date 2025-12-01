@@ -1,3 +1,4 @@
+//If you have a problem, try finding the problem in the console or text me the gc, note you can temper with this code as it may not be 100% right(this is my first real java project).
 import swiftbot.*;
 import java.util.*;
 
@@ -21,7 +22,7 @@ public class SimonSwiftGame {
     public static void main(String[] args) {
         try {
             // connect to SwiftBot
-            System.out.println("Connecting to SwiftBot...");
+            System.out.println("Connectingg to SwiftBot...");
             swiftBot = SwiftBotAPI.INSTANCE;
             System.out.println("Connected!");
 
@@ -49,7 +50,7 @@ public class SimonSwiftGame {
         System.out.println("WELCOME TO SIMON SWIFT!");
         System.out.println("A=RED  B=GREEN  X=BLUE  Y=YELLOW");
 
-        // ---- ask for difficulty safely ----
+        // ask for difficulty safely
         while (true) {
             System.out.print("\nSelect Difficulty (1-4): ");
             String line = scanner.nextLine();
@@ -62,7 +63,7 @@ public class SimonSwiftGame {
             }
         }
 
-        // ---- main game loop ----
+        // main game loop
         while (lives > 0) {
             System.out.println("\nROUND " + round + " | Score: " + score + " | Lives: " + lives);
 
