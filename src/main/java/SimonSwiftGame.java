@@ -9,34 +9,35 @@ public class SimonSwiftGame {
     static Scanner scanner = new Scanner(System.in);
     static Random random = new Random();
 
-    // Each colour is [R, G, B]
-    // 0 = RED, 1 = GREEN, 2 = BLUE, 3 = YELLOW
+    static volatile int lastButtonPressed = -1;
+    static final Object buttonLock = new Object();
+
     static int[][] colours = {
-        {255, 0,   0},   // RED
-        {0,   255, 0},   // GREEN
-        {0,   0,   255}, // BLUE
-        {255, 255, 0}    // YELLOW
+        {255, 0,   0},
+        {0,   255, 0},
+        {0,   0,   255},
+        {255, 255, 0}
     };
+
+    static final int TIME_FOR_30CM_AT_100 = 1500;
 
     public static void main(String[] args) {
         try {
-            // connect to SwiftBot
             System.out.println("Connecting to SwiftBot...");
             swiftBot = SwiftBotAPI.INSTANCE;
             System.out.println("Connected!");
 
-            // turn everything off to start clean
             swiftBot.disableUnderlights();
-
+            setupButtons();
             playGame();
 
         } catch (Exception e) {
             System.out.println("Fatal error: " + e.getMessage());
             e.printStackTrace();
         } finally {
-            // make sure robot is stopped and lights are off
             try {
                 if (swiftBot != null) {
+                    disableAllButtons();
                     swiftBot.disableUnderlights();
                     swiftBot.stopMove();
                 }
@@ -45,59 +46,174 @@ public class SimonSwiftGame {
         }
     }
 
+    private static void setupButtons() {
+        swiftBot.enableButton(Button.A, () -> {
+            synchronized (buttonLock) {
+                lastButtonPressed = 0;
+                buttonLock.notifyAll();
+            }
+        });
+
+        swiftBot.enableButton(Button.B, () -> {
+            synchronized (buttonLock) {
+                lastButtonPressed = 1;
+                buttonLock.notifyAll();
+            }
+        });
+
+        swiftBot.enableButton(Button.X, () -> {
+            synchronized (buttonLock) {
+                lastButtonPressed = 2;
+                buttonLock.notifyAll();
+            }
+        });
+
+        swiftBot.enableButton(Button.Y, () -> {
+            synchronized (buttonLock) {
+                lastButtonPressed = 3;
+                buttonLock.notifyAll();
+            }
+        });
+    }
+
+    private static void disableAllButtons() {
+        swiftBot.disableButton(Button.A);
+        swiftBot.disableButton(Button.B);
+        swiftBot.disableButton(Button.X);
+        swiftBot.disableButton(Button.Y);
+    }
+
+    private static int waitForButtonPress() throws InterruptedException {
+        synchronized (buttonLock) {
+            lastButtonPressed = -1;
+            while (lastButtonPressed == -1) {
+                buttonLock.wait();
+            }
+            int pressed = lastButtonPressed;
+            lastButtonPressed = -1;
+            return pressed;
+        }
+    }
+
+    private static void showColour(int colourIndex) {
+        int[] rgb = colours[colourIndex];
+        swiftBot.fillUnderlights(rgb);
+    }
+
+    private static void turnOffAllLEDs() {
+        swiftBot.disableUnderlights();
+    }
+
+    private static void blinkAllColoursRandomly() throws InterruptedException {
+        ArrayList<Integer> order = new ArrayList<>(Arrays.asList(0, 1, 2, 3));
+        Collections.shuffle(order);
+        
+        for (int colourIndex : order) {
+            showColour(colourIndex);
+            Thread.sleep(250);
+            turnOffAllLEDs();
+            Thread.sleep(100);
+        }
+    }
+
+    private static void initializeSequence() {
+        int startLength = 0;
+        
+        switch (difficulty) {
+            case 1: 
+                startLength = 0;
+                break;
+            case 2: 
+                startLength = 3;
+                break;
+            case 3: 
+                startLength = 6;
+                break;
+            case 4: 
+                startLength = 10;
+                break;
+        }
+        
+        for (int i = 0; i < startLength; i++) {
+            gameSequence.add(random.nextInt(4));
+        }
+        
+        round = startLength + 1;
+    }
+
+    private static int getMaxSequenceLength() {
+        switch (difficulty) {
+            case 1: return 3;
+            case 2: return 6;
+            case 3: return 10;
+            case 4: return 15;
+            default: return 15;
+        }
+    }
+
     private static void playGame() throws InterruptedException {
         System.out.println("WELCOME TO SIMON SWIFT!");
-        System.out.println("A=RED  B=GREEN  X=BLUE  Y=YELLOW");
+        System.out.println("Button Layout:");
+        System.out.println("A = RED");
+        System.out.println("B = GREEN");
+        System.out.println("X = BLUE");
+        System.out.println("Y = YELLOW");
+        System.out.println("You have " + lives + " lives.");
 
-        // ---- ask for difficulty safely ----
+        System.out.println("Difficulty Levels:");
+        System.out.println("1 = Easy (sequences of 1-3 colours)");
+        System.out.println("2 = Medium (sequences of 4-6 colours)");
+        System.out.println("3 = Hard (sequences of 7-10 colours)");
+        System.out.println("4 = Expert (sequences of 11-15 colours)");
+        
         while (true) {
-            System.out.print("\nSelect Difficulty (1-4): ");
+            System.out.print("Select Difficulty (1-4): ");
             String line = scanner.nextLine();
             try {
                 difficulty = Integer.parseInt(line);
                 if (difficulty >= 1 && difficulty <= 4) break;
                 System.out.println("Please enter a number between 1 and 4.");
             } catch (NumberFormatException e) {
-                System.out.println("Please enter a *number* between 1 and 4.");
+                System.out.println("Please enter a number between 1 and 4.");
             }
         }
 
-        // ---- main game loop ----
-        while (lives > 0) {
-            System.out.println("\nROUND " + round + " | Score: " + score + " | Lives: " + lives);
+        initializeSequence();
+        
+        int maxLength = getMaxSequenceLength();
+        System.out.println("Starting at round " + round + ". Max sequence length: " + maxLength);
+        System.out.println("Get ready...");
+        Thread.sleep(2000);
 
-            // add one random colour
+        while (lives > 0) {
+            System.out.println("ROUND " + round + " | Score: " + score + " | Lives: " + lives);
+
             gameSequence.add(random.nextInt(4));
 
-            // show sequence (all underlights in that colour)
             System.out.println("Watch carefully...");
             Thread.sleep(1000);
+            
             for (int colourIndex : gameSequence) {
-                int[] rgb = colours[colourIndex];
-                swiftBot.fillUnderlights(rgb);
+                showColour(colourIndex);
                 Thread.sleep(500);
-                swiftBot.disableUnderlights();
+                turnOffAllLEDs();
                 Thread.sleep(300);
             }
 
-            // get user input
-            System.out.println("Your turn! Enter sequence:");
+            System.out.println("Your turn! Press the buttons:");
             boolean correct = true;
 
             for (int i = 0; i < gameSequence.size(); i++) {
-                System.out.print("Button " + (i + 1) + " (A/B/X/Y): ");
-                String input = scanner.nextLine().trim().toUpperCase();
-
-                int entered = -1;
-                switch (input) {
-                    case "A": entered = 0; break; // RED
-                    case "B": entered = 1; break; // GREEN
-                    case "X": entered = 2; break; // BLUE
-                    case "Y": entered = 3; break; // YELLOW
-                    default:
-                        System.out.println("Invalid button! Use A, B, X, or Y");
-                        correct = false;
-                }
+                System.out.println("Button " + (i + 1) + " of " + gameSequence.size() + "...");
+                
+                int entered = waitForButtonPress();
+                
+                String buttonName = getButtonName(entered);
+                System.out.println("You pressed: " + buttonName);
+                
+                showColour(entered);
+                Thread.sleep(200);
+                turnOffAllLEDs();
 
                 if (entered != gameSequence.get(i)) {
                     correct = false;
@@ -107,85 +223,102 @@ public class SimonSwiftGame {
 
             if (correct) {
                 score++;
-                System.out.println("✓ Correct!");
+                System.out.println("Correct! Score: " + score);
 
-                // flash green
-                swiftBot.fillUnderlights(colours[1]);
-                Thread.sleep(200);
-                swiftBot.disableUnderlights();
+                showColour(1);
+                Thread.sleep(300);
+                turnOffAllLEDs();
 
-                // every 5 rounds offer to quit
+                if (gameSequence.size() >= maxLength) {
+                    System.out.println("CONGRATULATIONS!");
+                    System.out.println("You completed Level " + difficulty + "!");
+                    break;
+                }
+
                 if (round % 5 == 0) {
                     System.out.print("Continue? (Y/N): ");
-                    if (scanner.nextLine().trim().toUpperCase().equals("N")) {
+                    String response = scanner.nextLine().trim().toUpperCase();
+                    if (response.equals("N")) {
                         System.out.println("See you again champ!");
                         break;
                     }
                 }
 
-                // reached target length for this difficulty?
-                if ((difficulty == 1 && gameSequence.size() >= 3) ||
-                    (difficulty == 2 && gameSequence.size() >= 6) ||
-                    (difficulty == 3 && gameSequence.size() >= 10) ||
-                    (difficulty == 4 && gameSequence.size() >= 15)) {
-                    System.out.println("Max difficulty reached!");
-                    break;
-                }
-
                 round++;
+                
             } else {
                 lives--;
-                System.out.println("✗ Wrong!");
+                System.out.println("Wrong!");
 
-                // flash red
-                swiftBot.fillUnderlights(colours[0]);
-                Thread.sleep(200);
-                swiftBot.disableUnderlights();
+                showColour(0);
+                Thread.sleep(300);
+                turnOffAllLEDs();
 
                 if (lives == 0) {
                     System.out.println("Game Over!");
+                } else {
+                    gameSequence.remove(gameSequence.size() - 1);
+                    System.out.println("Lives remaining: " + lives);
+                    System.out.println("Try the same sequence again!");
                 }
             }
         }
 
-        System.out.println("\nFinal Score: " + score + " | Rounds: " + (round - 1));
+        System.out.println("FINAL RESULTS");
+        System.out.println("Final Score: " + score);
+        System.out.println("Final Round: " + round);
 
-        // simple celebration if player did well
         if (score >= 5) {
             celebrate();
         }
     }
 
-    private static void celebrate() throws InterruptedException {
-        System.out.println("Celebration time!");
-        int speed = Math.min(Math.max(score * 10, 40), 100);
-
-        // random colours
-        for (int i = 0; i < 4; i++) {
-            swiftBot.fillUnderlights(colours[random.nextInt(4)]);
-            Thread.sleep(250);
-            swiftBot.disableUnderlights();
-        }
-
-        // simple V-ish movement
-        swiftBot.move(speed, speed, 2000);
-        Thread.sleep(2000);
-        swiftBot.move(-50, 50, 850);
-        Thread.sleep(1000);
-        swiftBot.move(speed, speed, 2000);
-        Thread.sleep(2000);
-        swiftBot.move(-50, 50, 850);
-        Thread.sleep(1000);
-        swiftBot.move(speed, speed, 2000);
-        Thread.sleep(2000);
-
-        for (int i = 0; i < 4; i++) {
-            swiftBot.fillUnderlights(colours[random.nextInt(4)]);
-            Thread.sleep(250);
-            swiftBot.disableUnderlights();
+    private static String getButtonName(int colourIndex) {
+        switch (colourIndex) {
+            case 0: return "A (RED)";
+            case 1: return "B (GREEN)";
+            case 2: return "X (BLUE)";
+            case 3: return "Y (YELLOW)";
+            default: return "UNKNOWN";
         }
     }
+
+    private static void celebrate() throws InterruptedException {
+        System.out.println("Celebration time!");
+        
+        int speed;
+        if (score < 5) {
+            speed = 40;
+        } else if (score >= 10) {
+            speed = 100;
+        } else {
+            speed = score * 10;
+        }
+        
+        System.out.println("Celebration speed: " + speed + "%");
+
+        int timeFor30cm = (int) (TIME_FOR_30CM_AT_100 * (100.0 / speed));
+        int turnTime = 850;
+
+        System.out.println("Light show...");
+        blinkAllColoursRandomly();
+
+        System.out.println("Moving in V shape...");
+        
+        swiftBot.move(speed, speed, timeFor30cm);
+        Thread.sleep(timeFor30cm + 100);
+        
+        swiftBot.move(speed, -speed, turnTime);
+        Thread.sleep(turnTime + 100);
+        
+        swiftBot.move(speed, speed, timeFor30cm);
+        Thread.sleep(timeFor30cm + 100);
+        
+        swiftBot.stopMove();
+
+        System.out.println("Final light show...");
+        blinkAllColoursRandomly();
+        
+        System.out.println("Celebration complete!");
+    }
 }
-
-
-	
