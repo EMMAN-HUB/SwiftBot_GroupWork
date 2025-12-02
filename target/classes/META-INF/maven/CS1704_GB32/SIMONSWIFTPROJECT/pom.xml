@@ -5,20 +5,27 @@
 	<groupId>CS1704_GB32</groupId>
 	<artifactId>SIMONSWIFTPROJECT</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
+	
 	<repositories>
 		<repository>
 			<id>reposilite-repository-releases</id>
 			<name>Swiftbot Maven</name>
 			<url>https://swiftbot-maven.brunel.ac.uk/releases</url>
 		</repository>
-
 	</repositories>
+	
 	<dependencies>
 		<dependency>
 			<groupId>com.swiftbotlabs</groupId>
 			<artifactId>SwiftBot-API</artifactId>
 			<version>6.0.0</version>
 		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>5.9.2</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
-
-</project>	
+	
+</project>

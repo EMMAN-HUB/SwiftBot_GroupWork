@@ -12,11 +12,28 @@ public class SimonSwiftGame {
     static volatile int lastButtonPressed = -1;
     static final Object buttonLock = new Object();
 
+    static final int RED = 0;
+    static final int GREEN = 1;
+    static final int BLUE = 2;
+    static final int YELLOW = 3;
+
+    static final int BUTTON_A = 0;
+    static final int BUTTON_B = 1;
+    static final int BUTTON_X = 2;
+    static final int BUTTON_Y = 3;
+
     static int[][] colours = {
         {255, 0,   0},
         {0,   255, 0},
         {0,   0,   255},
         {255, 255, 0}
+    };
+
+    static int[] buttonToColour = {
+        RED,
+        GREEN,
+        BLUE,
+        YELLOW
     };
 
     static final int TIME_FOR_30CM_AT_100 = 1500;
@@ -49,28 +66,28 @@ public class SimonSwiftGame {
     private static void setupButtons() {
         swiftBot.enableButton(Button.A, () -> {
             synchronized (buttonLock) {
-                lastButtonPressed = 0;
+                lastButtonPressed = BUTTON_A;
                 buttonLock.notifyAll();
             }
         });
 
         swiftBot.enableButton(Button.B, () -> {
             synchronized (buttonLock) {
-                lastButtonPressed = 1;
+                lastButtonPressed = BUTTON_B;
                 buttonLock.notifyAll();
             }
         });
 
         swiftBot.enableButton(Button.X, () -> {
             synchronized (buttonLock) {
-                lastButtonPressed = 2;
+                lastButtonPressed = BUTTON_X;
                 buttonLock.notifyAll();
             }
         });
 
         swiftBot.enableButton(Button.Y, () -> {
             synchronized (buttonLock) {
-                lastButtonPressed = 3;
+                lastButtonPressed = BUTTON_Y;
                 buttonLock.notifyAll();
             }
         });
@@ -95,6 +112,10 @@ public class SimonSwiftGame {
         }
     }
 
+    private static int getColourForButton(int button) {
+        return buttonToColour[button];
+    }
+
     private static void showColour(int colourIndex) {
         int[] rgb = colours[colourIndex];
         swiftBot.fillUnderlights(rgb);
@@ -105,7 +126,7 @@ public class SimonSwiftGame {
     }
 
     private static void blinkAllColoursRandomly() throws InterruptedException {
-        ArrayList<Integer> order = new ArrayList<>(Arrays.asList(0, 1, 2, 3));
+        ArrayList<Integer> order = new ArrayList<>(Arrays.asList(RED, GREEN, BLUE, YELLOW));
         Collections.shuffle(order);
         
         for (int colourIndex : order) {
@@ -124,7 +145,7 @@ public class SimonSwiftGame {
                 startLength = 0;
                 break;
             case 2: 
-                startLength = 3;
+                startLength = 4;
                 break;
             case 3: 
                 startLength = 6;
@@ -143,7 +164,7 @@ public class SimonSwiftGame {
 
     private static int getMaxSequenceLength() {
         switch (difficulty) {
-            case 1: return 3;
+            case 1: return 4;
             case 2: return 6;
             case 3: return 10;
             case 4: return 15;
@@ -153,16 +174,16 @@ public class SimonSwiftGame {
 
     private static void playGame() throws InterruptedException {
         System.out.println("WELCOME TO SIMON SWIFT!");
-        System.out.println("Button Layout:");
-        System.out.println("A = RED");
-        System.out.println("B = GREEN");
-        System.out.println("X = BLUE");
-        System.out.println("Y = YELLOW");
+        System.out.println("Button to Colour Mapping:");
+        System.out.println("Button A = RED");
+        System.out.println("Button B = GREEN");
+        System.out.println("Button X = BLUE");
+        System.out.println("Button Y = YELLOW");
         System.out.println("You have " + lives + " lives.");
 
         System.out.println("Difficulty Levels:");
-        System.out.println("1 = Easy (sequences of 1-3 colours)");
-        System.out.println("2 = Medium (sequences of 4-6 colours)");
+        System.out.println("1 = Easy (sequences of 1-4 colours)");
+        System.out.println("2 = Medium (sequences of 5-6 colours)");
         System.out.println("3 = Hard (sequences of 7-10 colours)");
         System.out.println("4 = Expert (sequences of 11-15 colours)");
         
@@ -206,16 +227,17 @@ public class SimonSwiftGame {
             for (int i = 0; i < gameSequence.size(); i++) {
                 System.out.println("Button " + (i + 1) + " of " + gameSequence.size() + "...");
                 
-                int entered = waitForButtonPress();
+                int buttonPressed = waitForButtonPress();
+                int colourEntered = getColourForButton(buttonPressed);
                 
-                String buttonName = getButtonName(entered);
+                String buttonName = getButtonName(buttonPressed);
                 System.out.println("You pressed: " + buttonName);
                 
-                showColour(entered);
+                showColour(colourEntered);
                 Thread.sleep(200);
                 turnOffAllLEDs();
 
-                if (entered != gameSequence.get(i)) {
+                if (colourEntered != gameSequence.get(i)) {
                     correct = false;
                     break;
                 }
@@ -225,7 +247,7 @@ public class SimonSwiftGame {
                 score++;
                 System.out.println("Correct! Score: " + score);
 
-                showColour(1);
+                showColour(GREEN);
                 Thread.sleep(300);
                 turnOffAllLEDs();
 
@@ -250,7 +272,7 @@ public class SimonSwiftGame {
                 lives--;
                 System.out.println("Wrong!");
 
-                showColour(0);
+                showColour(RED);
                 Thread.sleep(300);
                 turnOffAllLEDs();
 
@@ -273,27 +295,30 @@ public class SimonSwiftGame {
         }
     }
 
-    private static String getButtonName(int colourIndex) {
-        switch (colourIndex) {
-            case 0: return "A (RED)";
-            case 1: return "B (GREEN)";
-            case 2: return "X (BLUE)";
-            case 3: return "Y (YELLOW)";
+    private static String getButtonName(int button) {
+        switch (button) {
+            case BUTTON_A: return "A (RED)";
+            case BUTTON_B: return "B (GREEN)";
+            case BUTTON_X: return "X (BLUE)";
+            case BUTTON_Y: return "Y (YELLOW)";
             default: return "UNKNOWN";
+        }
+    }
+
+    private static int calculateSpeed(int playerScore) {
+        if (playerScore < 5) {
+            return 40;
+        } else if (playerScore >= 10) {
+            return 100;
+        } else {
+            return playerScore * 10;
         }
     }
 
     private static void celebrate() throws InterruptedException {
         System.out.println("Celebration time!");
         
-        int speed;
-        if (score < 5) {
-            speed = 40;
-        } else if (score >= 10) {
-            speed = 100;
-        } else {
-            speed = score * 10;
-        }
+        int speed = calculateSpeed(score);
         
         System.out.println("Celebration speed: " + speed + "%");
 
