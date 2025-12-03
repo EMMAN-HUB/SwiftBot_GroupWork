@@ -23,17 +23,28 @@ public class SimonSwiftGame {
     static final int BUTTON_Y = 3;
 
     static int[][] colours = {
-        {255, 0,   0},
-        {0,   255, 0},
-        {0,   0,   255},
-        {255, 255, 0}
+        {255, 0,   0},   // RED
+        {0,   255, 0},   // GREEN
+        {0,   0,   255}, // BLUE
+        {255, 255, 0}    // YELLOW
     };
 
+    // Button to Colour mapping
+    // A = RED, B = GREEN, X = BLUE, Y = YELLOW
     static int[] buttonToColour = {
-        RED,
-        GREEN,
-        BLUE,
-        YELLOW
+        RED,      // BUTTON_A
+        GREEN,    // BUTTON_B
+        BLUE,     // BUTTON_X
+        YELLOW    // BUTTON_Y
+    };
+
+    // Colour to LED position mapping
+    // RED = FRONT_LEFT, GREEN = FRONT_RIGHT, BLUE = BACK_LEFT, YELLOW = BACK_RIGHT
+    static Underlight[] colourToLED = {
+        Underlight.FRONT_LEFT,   // RED
+        Underlight.FRONT_RIGHT,  // GREEN
+        Underlight.BACK_LEFT,    // BLUE
+        Underlight.BACK_RIGHT    // YELLOW
     };
 
     static final int TIME_FOR_30CM_AT_100 = 1500;
@@ -41,24 +52,36 @@ public class SimonSwiftGame {
     public static void main(String[] args) {
         try {
             System.out.println("Connecting to SwiftBot...");
+            // Attempt to get the SwiftBot instance
             swiftBot = SwiftBotAPI.INSTANCE;
             System.out.println("Connected!");
 
+            // Setup routine
             swiftBot.disableUnderlights();
             setupButtons();
+            
+            // Start the main game loop
             playGame();
 
         } catch (Exception e) {
-            System.out.println("Fatal error: " + e.getMessage());
+            // Catches any error during connection or gameplay
+            System.out.println("A fatal error occurred during program execution or connection.");
+            System.out.println("Error details: " + e.getMessage());
             e.printStackTrace();
+
         } finally {
+            // Cleanup: always runs, even if an exception occurs
             try {
                 if (swiftBot != null) {
+                    System.out.println("Performing cleanup...");
                     disableAllButtons();
                     swiftBot.disableUnderlights();
                     swiftBot.stopMove();
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception cleanupException) {
+                // Ignore exceptions during cleanup, as the system might already be down
+                System.err.println("Warning: Cleanup operation failed, the SwiftBot may need manual reset.");
+            }
             System.out.println("Thank you for playing!");
         }
     }
@@ -104,6 +127,7 @@ public class SimonSwiftGame {
         synchronized (buttonLock) {
             lastButtonPressed = -1;
             while (lastButtonPressed == -1) {
+                // The main thread waits here until a button event fires notifyAll()
                 buttonLock.wait();
             }
             int pressed = lastButtonPressed;
@@ -116,9 +140,22 @@ public class SimonSwiftGame {
         return buttonToColour[button];
     }
 
+    // Shows a single colour on its specific LED position
     private static void showColour(int colourIndex) {
         int[] rgb = colours[colourIndex];
-        swiftBot.fillUnderlights(rgb);
+        Underlight led = colourToLED[colourIndex];
+        // FIX for: The method setUnderlight(Underlight, int[]) is not applicable for the arguments (Underlight, int, int, int)
+        swiftBot.setUnderlight(led, rgb); 
+    }
+
+    // Shows all four colours on their respective LEDs
+    private static void showAllColours() {
+        for (int i = 0; i < 4; i++) {
+            int[] rgb = colours[i];
+            Underlight led = colourToLED[i];
+            // FIX for: The method setUnderlight(Underlight, int[]) is not applicable for the arguments (Underlight, int, int, int)
+            swiftBot.setUnderlight(led, rgb);
+        }
     }
 
     private static void turnOffAllLEDs() {
@@ -174,11 +211,11 @@ public class SimonSwiftGame {
 
     private static void playGame() throws InterruptedException {
         System.out.println("WELCOME TO SIMON SWIFT!");
-        System.out.println("Button to Colour Mapping:");
-        System.out.println("Button A = RED");
-        System.out.println("Button B = GREEN");
-        System.out.println("Button X = BLUE");
-        System.out.println("Button Y = YELLOW");
+        System.out.println("Button to Colour and LED Mapping:");
+        System.out.println("Button A = RED    = FRONT LEFT");
+        System.out.println("Button B = GREEN  = FRONT RIGHT");
+        System.out.println("Button X = BLUE   = BACK LEFT");
+        System.out.println("Button Y = YELLOW = BACK RIGHT");
         System.out.println("You have " + lives + " lives.");
 
         System.out.println("Difficulty Levels:");
@@ -206,6 +243,7 @@ public class SimonSwiftGame {
         System.out.println("Get ready...");
         Thread.sleep(2000);
 
+        // Main game loop
         while (lives > 0) {
             System.out.println("ROUND " + round + " | Score: " + score + " | Lives: " + lives);
 
@@ -214,6 +252,7 @@ public class SimonSwiftGame {
             System.out.println("Watch carefully...");
             Thread.sleep(1000);
             
+            // Display the sequence - each colour lights its specific LED
             for (int colourIndex : gameSequence) {
                 showColour(colourIndex);
                 Thread.sleep(500);
@@ -224,6 +263,7 @@ public class SimonSwiftGame {
             System.out.println("Your turn! Press the buttons:");
             boolean correct = true;
 
+            // Get player input for each colour in the sequence
             for (int i = 0; i < gameSequence.size(); i++) {
                 System.out.println("Button " + (i + 1) + " of " + gameSequence.size() + "...");
                 
@@ -233,6 +273,7 @@ public class SimonSwiftGame {
                 String buttonName = getButtonName(buttonPressed);
                 System.out.println("You pressed: " + buttonName);
                 
+                // Show the colour on its specific LED
                 showColour(colourEntered);
                 Thread.sleep(200);
                 turnOffAllLEDs();
@@ -247,6 +288,7 @@ public class SimonSwiftGame {
                 score++;
                 System.out.println("Correct! Score: " + score);
 
+                // Flash green on FRONT_RIGHT for success
                 showColour(GREEN);
                 Thread.sleep(300);
                 turnOffAllLEDs();
@@ -272,6 +314,7 @@ public class SimonSwiftGame {
                 lives--;
                 System.out.println("Wrong!");
 
+                // Flash red on FRONT_LEFT for wrong answer
                 showColour(RED);
                 Thread.sleep(300);
                 turnOffAllLEDs();
@@ -297,10 +340,10 @@ public class SimonSwiftGame {
 
     private static String getButtonName(int button) {
         switch (button) {
-            case BUTTON_A: return "A (RED)";
-            case BUTTON_B: return "B (GREEN)";
-            case BUTTON_X: return "X (BLUE)";
-            case BUTTON_Y: return "Y (YELLOW)";
+            case BUTTON_A: return "A (RED - FRONT LEFT)";
+            case BUTTON_B: return "B (GREEN - FRONT RIGHT)";
+            case BUTTON_X: return "X (BLUE - BACK LEFT)";
+            case BUTTON_Y: return "Y (YELLOW - BACK RIGHT)";
             default: return "UNKNOWN";
         }
     }
